@@ -7,7 +7,7 @@ from datetime import datetime, date
 
 # ページ設定
 st.set_page_config(page_title="実用版タスク管理", layout="centered")
-st.title("✅ 実用版・褒めてくれるタスク管理")
+st.title("✅ 褒めてくれるタスク管理アプリ")
 
 # 褒め言葉リスト
 PRAISE_MESSAGES = [
