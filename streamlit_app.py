@@ -7,7 +7,7 @@ from datetime import datetime, date, timedelta
 import urllib.parse
 from streamlit_calendar import calendar
 
-# ページ設定
+# ページ設定 (カレンダーとリストを並べるため wide モード必須)
 st.set_page_config(page_title="実用版タスク管理", layout="wide")
 st.title("✅ 実用版・褒めてくれるタスク管理")
 
@@ -93,86 +93,96 @@ def main():
         st.toast(random.choice(PRAISE_MESSAGES), icon="🎉")
         st.session_state["celebrate"] = False
 
-    # タブの作成
-    tab_list, tab_calendar = st.tabs(["📋 リスト一覧・追加", "📅 カレンダー表示"])
+    # 画面を左右に分割 (左:リスト / 右:カレンダー)
+    col_list, col_calendar = st.columns([0.45, 0.55], gap="large")
 
-    # === タブ1: リスト表示 & 追加フォーム ===
-    with tab_list:
-        # --- ここに「タスク追加フォーム」を移動しました ---
+    # データ取得
+    df = get_tasks(conn)
+
+    # === 左カラム: リスト一覧 & 追加フォーム ===
+    with col_list:
+        st.subheader("📋 タスクリスト")
+        
+        # タスク追加フォーム (リストの上に配置)
         with st.expander("➕ 新しいタスクを追加する", expanded=True):
             with st.form("task_form", clear_on_submit=True):
-                col_input1, col_input2, col_input3 = st.columns([0.5, 0.25, 0.25])
-                with col_input1:
-                    new_task = st.text_input("タスク名", placeholder="例: レポート提出")
-                with col_input2:
+                new_task = st.text_input("タスク名", placeholder="例: レポート提出")
+                col_f1, col_f2 = st.columns(2)
+                with col_f1:
                     task_date = st.date_input("期限日", value=date.today())
-                with col_input3:
+                with col_f2:
                     task_priority = st.selectbox("優先度", ["高", "中", "低"], index=1)
                 
-                # 追加ボタン
                 if st.form_submit_button("追加する", type="primary"):
                     if new_task:
                         add_task(conn, new_task, task_date, task_priority)
                         st.toast(f"追加しました！", icon="📅")
                         time.sleep(0.5)
-                        st.rerun() # ここで再読み込みするので、カレンダーにも即反映されます
+                        st.rerun()
                     else:
                         st.warning("タスク名を入力してください")
 
         st.divider()
 
-        # データ取得
-        df = get_tasks(conn)
-
-        # リスト表示
+        # 進捗バー
         if not df.empty:
             done = len(df[df['status'] == '完了'])
             total = len(df)
-            st.write(f"**進捗状況: {done}/{total} 完了**")
+            st.caption(f"進捗状況: {done}/{total} 完了")
             st.progress(done / total)
         
+        # リスト表示
         if df.empty:
-            st.info("上のフォームからタスクを追加してください。")
+            st.info("タスクを追加してください。")
         else:
+            # スクロールできるようにコンテナの高さを指定しても良いが、今回はそのまま表示
             for index, row in df.iterrows():
                 with st.container():
-                    col1, col2, col3, col4, col5, col6 = st.columns([0.05, 0.35, 0.15, 0.1, 0.15, 0.1])
+                    # カラム幅を微調整 (狭いスペース用に最適化)
+                    c1, c2, c3, c4 = st.columns([0.1, 0.5, 0.25, 0.15])
+                    
                     is_done = row['status'] == '完了'
                     
-                    with col1:
+                    with c1:
                         checked = st.checkbox("", value=is_done, key=f"chk_{row['id']}")
                         if checked != is_done:
                             update_status(conn, row['id'], checked)
                             if checked: st.session_state["celebrate"] = True
                             st.rerun()
-                    with col2:
-                        st.markdown(f"~~{row['task_name']}~~" if is_done else f"**{row['task_name']}**")
-                    with col3:
+                    
+                    with c2:
+                        label = f"~~{row['task_name']}~~" if is_done else f"**{row['task_name']}**"
+                        st.markdown(label)
+                        # スマホ等で見やすいよう、日付と優先度を下の行に小さく出す
                         if not is_done:
                             due = datetime.strptime(row['due_date'], '%Y-%m-%d').date()
-                            if due < date.today(): st.markdown(f":red[⚠️ {row['due_date']}]")
-                            elif due == date.today(): st.markdown(f":orange[今日]")
-                            else: st.markdown(f"{row['due_date']}")
-                        else: st.markdown("-")
-                    with col4:
-                        p = row['priority']
-                        color = "red" if p == "高" else "blue" if p == "中" else "grey"
-                        st.markdown(f":{color}[{p}]")
-                    with col5:
+                            p_color = "red" if row['priority'] == "高" else "blue" if row['priority'] == "中" else "grey"
+                            
+                            date_str = f"{row['due_date']}"
+                            if due < date.today(): date_str = f"⚠️ {date_str}"
+                            elif due == date.today(): date_str = f"今日!"
+                            
+                            st.caption(f"📅 {date_str} | :{p_color}[{row['priority']}]")
+
+                    with c3:
+                        # Googleカレンダー登録ボタン (アイコンのみにして省スペース化)
                         if not is_done:
                             cal_url = generate_google_calendar_link(row['task_name'], row['due_date'])
-                            st.markdown(f'<a href="{cal_url}" target="_blank" style="text-decoration:none;"><button style="background-color:white; border:1px solid #ddd; border-radius:4px; font-size:12px; cursor:pointer;">📅 登録</button></a>', unsafe_allow_html=True)
-                    with col6:
+                            st.markdown(f'<a href="{cal_url}" target="_blank" style="text-decoration:none;">📅登録</a>', unsafe_allow_html=True)
+
+                    with c4:
                         if st.button("🗑️", key=f"del_{row['id']}"):
                             delete_task(conn, row['id'])
                             st.rerun()
+                    
                     st.markdown("---")
 
-    # === タブ2: カレンダー表示 ===
-    with tab_calendar:
-        # データ再取得は不要（dfをそのまま使う）
+    # === 右カラム: カレンダー表示 ===
+    with col_calendar:
+        st.subheader("📅 カレンダー")
+        
         if df.empty:
-            st.info("リスト一覧タブでタスクを追加すると、ここに表示されます。")
+            st.info("タスクを追加するとカレンダーに反映されます。")
         else:
             events = []
             for index, row in df.iterrows():
@@ -190,15 +200,17 @@ def main():
                     "start": row['due_date'],
                     "backgroundColor": color,
                     "borderColor": color,
+                    "allDay": True
                 })
 
             calendar_options = {
                 "headerToolbar": {
                     "left": "today prev,next",
                     "center": "title",
-                    "right": "dayGridMonth,timeGridWeek,timeGridDay"
+                    "right": "dayGridMonth,listWeek"
                 },
                 "initialView": "dayGridMonth",
+                "height": 600, # カレンダーの高さを固定で見やすく
             }
             
             calendar(events=events, options=calendar_options)
