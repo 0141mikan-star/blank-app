@@ -5,10 +5,10 @@ import random
 import time
 from datetime import datetime, date, timedelta
 import urllib.parse
-from streamlit_calendar import calendar  # カレンダー用ライブラリ
+from streamlit_calendar import calendar
 
 # ページ設定
-st.set_page_config(page_title="実用版タスク管理", layout="wide") # カレンダーが見やすいようにwideモードに変更
+st.set_page_config(page_title="実用版タスク管理", layout="wide")
 st.title("✅ 実用版・褒めてくれるタスク管理")
 
 # 褒め言葉リスト
@@ -93,43 +93,46 @@ def main():
         st.toast(random.choice(PRAISE_MESSAGES), icon="🎉")
         st.session_state["celebrate"] = False
 
-    # サイドバー
-    st.sidebar.header("📝 新しいタスク")
-    with st.sidebar.form("task_form", clear_on_submit=True):
-        new_task = st.text_input("タスク名")
-        col1, col2 = st.columns(2)
-        with col1:
-            task_date = st.date_input("期限日", value=date.today())
-        with col2:
-            task_priority = st.selectbox("優先度", ["高", "中", "低"], index=1)
-        
-        if st.form_submit_button("追加する"):
-            if new_task:
-                add_task(conn, new_task, task_date, task_priority)
-                st.toast(f"追加しました！", icon="📅")
-                time.sleep(0.5)
-                st.rerun()
-            else:
-                st.warning("タスク名を入力してください")
+    # タブの作成
+    tab_list, tab_calendar = st.tabs(["📋 リスト一覧・追加", "📅 カレンダー表示"])
 
-    # データ取得
-    df = get_tasks(conn)
-
-    # --- タブで表示切り替え ---
-    tab_list, tab_calendar = st.tabs(["📋 リスト一覧", "📅 カレンダー表示"])
-
-    # === タブ1: リスト表示 ===
+    # === タブ1: リスト表示 & 追加フォーム ===
     with tab_list:
+        # --- ここに「タスク追加フォーム」を移動しました ---
+        with st.expander("➕ 新しいタスクを追加する", expanded=True):
+            with st.form("task_form", clear_on_submit=True):
+                col_input1, col_input2, col_input3 = st.columns([0.5, 0.25, 0.25])
+                with col_input1:
+                    new_task = st.text_input("タスク名", placeholder="例: レポート提出")
+                with col_input2:
+                    task_date = st.date_input("期限日", value=date.today())
+                with col_input3:
+                    task_priority = st.selectbox("優先度", ["高", "中", "低"], index=1)
+                
+                # 追加ボタン
+                if st.form_submit_button("追加する", type="primary"):
+                    if new_task:
+                        add_task(conn, new_task, task_date, task_priority)
+                        st.toast(f"追加しました！", icon="📅")
+                        time.sleep(0.5)
+                        st.rerun() # ここで再読み込みするので、カレンダーにも即反映されます
+                    else:
+                        st.warning("タスク名を入力してください")
+
+        st.divider()
+
+        # データ取得
+        df = get_tasks(conn)
+
+        # リスト表示
         if not df.empty:
             done = len(df[df['status'] == '完了'])
             total = len(df)
             st.write(f"**進捗状況: {done}/{total} 完了**")
             st.progress(done / total)
         
-        st.divider()
-
         if df.empty:
-            st.info("タスクはありません。")
+            st.info("上のフォームからタスクを追加してください。")
         else:
             for index, row in df.iterrows():
                 with st.container():
@@ -167,21 +170,20 @@ def main():
 
     # === タブ2: カレンダー表示 ===
     with tab_calendar:
+        # データ再取得は不要（dfをそのまま使う）
         if df.empty:
-            st.info("タスクを追加するとここに表示されます。")
+            st.info("リスト一覧タブでタスクを追加すると、ここに表示されます。")
         else:
-            # カレンダー用のデータ形式に変換
             events = []
             for index, row in df.iterrows():
-                # 色の決定
                 if row['status'] == '完了':
-                    color = "#808080" # グレー
+                    color = "#808080"
                 elif row['priority'] == "高":
-                    color = "#FF4B4B" # 赤
+                    color = "#FF4B4B"
                 elif row['priority'] == "中":
-                    color = "#1C83E1" # 青
+                    color = "#1C83E1"
                 else:
-                    color = "#27C46D" # 緑
+                    color = "#27C46D"
 
                 events.append({
                     "title": row['task_name'],
@@ -190,7 +192,6 @@ def main():
                     "borderColor": color,
                 })
 
-            # カレンダーの設定
             calendar_options = {
                 "headerToolbar": {
                     "left": "today prev,next",
@@ -200,7 +201,6 @@ def main():
                 "initialView": "dayGridMonth",
             }
             
-            # カレンダー表示
             calendar(events=events, options=calendar_options)
 
     conn.close()
