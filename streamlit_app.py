@@ -15,7 +15,7 @@ st.set_page_config(page_title="褒めてくれる勉強時間・タスク管理�
 # --- 日本時間 (JST) の定義 ---
 JST = timezone(timedelta(hours=9))
 
-# --- セッションステート初期化 (エラー修正箇所★) ---
+# --- セッションステート初期化 (エラー修正済み★) ---
 if "toast_msg" not in st.session_state:
     st.session_state["toast_msg"] = None
 if "is_studying" not in st.session_state:
@@ -28,7 +28,7 @@ if "selected_date" not in st.session_state:
     st.session_state["selected_date"] = None
 if "current_subject" not in st.session_state:
     st.session_state["current_subject"] = ""
-# ★ここが抜けていたためエラーになっていました
+# ★ここを追加しました！これでKeyErrorが直ります
 if "celebrate" not in st.session_state:
     st.session_state["celebrate"] = False
 
@@ -232,6 +232,7 @@ def check_hashes(password, hashed_text):
 # --- ユーザー管理関数 ---
 def add_user(username, password, nickname):
     try:
+        # 空白除去
         username = username.strip()
         password = password.strip()
         nickname = nickname.strip()
@@ -793,6 +794,7 @@ def main():
         c4.write(f"Next Lv: **{xp_needed} XP**")
         c4.progress(max(0.0, min(1.0, progress_val)))
 
+    # エラーになっていた箇所 (修正済み)
     if st.session_state["celebrate"]:
         st.balloons()
         st.session_state["celebrate"] = False
