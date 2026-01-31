@@ -15,6 +15,40 @@ st.set_page_config(page_title="褒めてくれる勉強時間・タスク管理�
 # --- 日本時間 (JST) の定義 ---
 JST = timezone(timedelta(hours=9))
 
+# --- セッションステート初期化 (エラー回避の最強版) ---
+# 必要な変数がなければ、強制的にデフォルト値を入れる
+defaults = {
+    "toast_msg": None,
+    "is_studying": False,
+    "start_time": None,
+    "last_cal_event": None,
+    "selected_date": None,
+    "current_subject": "",
+    "celebrate": False,  # ★ここが重要！絶対にFalseを入れる
+    "calendar_key_uid": 0,
+    "calendar_initial_date": datetime.now(JST).strftime('%Y-%m-%d'),
+    "logged_in": False,
+    "username": ""
+}
+
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
+
+# トースト通知表示 (エラーが出ない書き方 .get を使用)
+if st.session_state.get("toast_msg"):
+    st.toast(st.session_state["toast_msg"], icon="🆙")
+    st.session_state["toast_msg"] = None 
+
+st.title("✅ 褒めてくれる勉強時間・タスク管理アプリ")
+
+# 称号ガチャのリスト
+GACHA_TITLES = [
+    "駆け出し冒険者", "夜更かしの達人", "努力の天才", "タスクスレイヤー",
+    "週末の戦士", "無限の集中力", "数学の悪魔", "コードの魔術師",
+    "文房具マスター", "伝説の勇者", "睡眠不足の神", "カフェイン中毒"
+]
+
 # --- Supabase接続設定 ---
 @st.cache_resource
 def init_supabase():
@@ -198,10 +232,10 @@ def check_hashes(password, hashed_text):
         return True
     return False
 
-# --- ユーザー管理関数 ---
+# --- ユーザー管理関数 (空白削除入り) ---
 def add_user(username, password, nickname):
     try:
-        # 空白除去
+        # 入力の空白を自動削除
         username = username.strip()
         password = password.strip()
         nickname = nickname.strip()
@@ -370,13 +404,6 @@ def buy_custom_title_rights(username, cost):
         return True, new_coins
     return False, current_coins
 
-# 称号ガチャリスト
-GACHA_TITLES = [
-    "駆け出し冒険者", "夜更かしの達人", "努力の天才", "タスクスレイヤー",
-    "週末の戦士", "無限の集中力", "数学の悪魔", "コードの魔術師",
-    "文房具マスター", "伝説の勇者", "睡眠不足の神", "カフェイン中毒"
-]
-
 def play_gacha(username, cost):
     user_data = get_user_data(username)
     current_coins = user_data.get('coins', 0)
@@ -416,7 +443,7 @@ def parse_correct_date(raw_date):
     except:
         return raw_date
 
-# --- 詳細ダイアログ (削除機能追加) ---
+# --- 詳細ダイアログ ---
 @st.dialog("📅 記録の詳細")
 def show_detail_dialog(target_date, df_tasks, df_logs, username):
     st.write(f"**{target_date}** の記録")
@@ -447,7 +474,6 @@ def show_detail_dialog(target_date, df_tasks, df_logs, username):
                 cc1, cc2 = st.columns([0.8, 0.2])
                 icon = "✅" if row['status'] == '完了' else "⬜"
                 cc1.write(f"{icon} {row['task_name']}")
-                # タスク削除ボタン
                 if cc2.button("🗑️", key=f"del_task_cal_{row['id']}"):
                     delete_task(row['id'])
                     st.session_state["toast_msg"] = "タスクを削除しました"
@@ -461,7 +487,6 @@ def show_detail_dialog(target_date, df_tasks, df_logs, username):
             for _, row in day_logs.iterrows():
                 cc1, cc2 = st.columns([0.8, 0.2])
                 cc1.write(f"・{row['subject']}: {row['duration_minutes']}分")
-                # ログ削除ボタン
                 if cc2.button("🗑️", key=f"del_log_cal_{row['id']}"):
                     delete_study_log(row['id'], username, row['duration_minutes'])
                     st.session_state["toast_msg"] = f"ログを削除 (-{row['duration_minutes']} XP/Coin)"
@@ -469,7 +494,7 @@ def show_detail_dialog(target_date, df_tasks, df_logs, username):
         else:
             st.caption("なし")
 
-# --- カレンダーコンポーネント (ToDoタブ用) ---
+# --- カレンダーコンポーネント ---
 def render_calendar_and_details(df_tasks, df_logs, unique_key, username):
     st.markdown("""
     <style>
@@ -539,7 +564,7 @@ def render_calendar_and_details(df_tasks, df_logs, unique_key, username):
             target_date = parse_correct_date(raw_date_str)
             show_detail_dialog(target_date, df_tasks, df_logs, username)
 
-# --- その日のタスクリスト (タイマーダブ用) ---
+# --- その日のタスクリスト ---
 def render_daily_task_list(df_tasks, unique_key):
     st.subheader("📅 今日のクエスト")
     
@@ -584,7 +609,6 @@ def main():
         st.session_state["logged_in"] = False
     if "username" not in st.session_state:
         st.session_state["username"] = ""
-    # エラー回避: 変数がなければFalseを入れる
     if "is_studying" not in st.session_state:
         st.session_state["is_studying"] = False
     if "celebrate" not in st.session_state:
@@ -593,8 +617,6 @@ def main():
         st.session_state["start_time"] = None
     if "current_subject" not in st.session_state:
         st.session_state["current_subject"] = ""
-
-    st.title("✅ 褒めてくれる勉強時間・タスク管理アプリ")
 
     # === ログイン画面 ===
     if not st.session_state["logged_in"]:
@@ -725,7 +747,7 @@ def main():
         
         now = time.time()
         start = st.session_state.get("start_time", now)
-        if start is None: start = now # 安全策
+        if start is None: start = now
         
         elapsed_sec = int(now - start)
         h = elapsed_sec // 3600
