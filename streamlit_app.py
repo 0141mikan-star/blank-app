@@ -57,7 +57,7 @@ def add_user(username, password, nickname):
             "nickname": nickname.strip(),
             "xp": 0, "coins": 0, "unlocked_themes": "標準",
             "current_title": "見習い", "unlocked_titles": "見習い",
-            "current_wallpaper": "シンプル", "unlocked_wallpapers": "シンプル",
+            "current_wallpaper": "草原", "unlocked_wallpapers": "草原",
             "custom_title_unlocked": False
         }
         supabase.table("users").insert(data).execute()
@@ -111,7 +111,7 @@ def apply_wallpaper(wallpaper_name, bg_opacity=0.3):
     </style>
     """, unsafe_allow_html=True)
 
-# --- DB操作関数群 ---
+# --- DB操作 ---
 def get_user_data(username):
     res = supabase.table("users").select("*").eq("username", username).execute()
     return res.data[0] if res.data else None
@@ -153,13 +153,17 @@ def get_study_logs(username):
 
 # --- メイン処理 ---
 def main():
-    # 1. ログイン状態の管理のみ最初に初期化
-    if "logged_in" not in st.session_state:
-        st.session_state["logged_in"] = False
-    if "username" not in st.session_state:
-        st.session_state["username"] = ""
+    # ★ 徹底初期化: 変数が存在しない場合は即座に作成する
+    if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
+    if "username" not in st.session_state: st.session_state["username"] = ""
+    if "is_studying" not in st.session_state: st.session_state["is_studying"] = False
+    if "celebrate" not in st.session_state: st.session_state["celebrate"] = False
+    if "toast_msg" not in st.session_state: st.session_state["toast_msg"] = None
+    if "start_time" not in st.session_state: st.session_state["start_time"] = None
+    if "current_subject" not in st.session_state: st.session_state["current_subject"] = ""
+    if "last_cal_event" not in st.session_state: st.session_state["last_cal_event"] = None
 
-    # 2. 未ログイン時の画面
+    # ログイン画面
     if not st.session_state["logged_in"]:
         st.sidebar.title("🔐 ログイン")
         choice = st.sidebar.selectbox("メニュー", ["ログイン", "新規登録"])
@@ -181,33 +185,24 @@ def main():
             nn = st.text_input("ニックネーム")
             if st.button("登録"):
                 if nu and np and nn:
-                    if add_user(nu, np, nn): st.success("登録完了！ログインしてください。")
+                    if add_user(nu, np, nn): st.success("完了！ログインしてください。")
                     else: st.error("そのIDは使われています。")
-                else: st.warning("全項目入力してください。")
         return
 
-    # 3. ログイン後のみ、RPG機能用変数を初期化 (KeyError対策★)
-    post_login_defaults = {
-        "is_studying": False, "start_time": None, "current_subject": "",
-        "celebrate": False, "toast_msg": None, "last_cal_event": None
-    }
-    for k, v in post_login_defaults.items():
-        if k not in st.session_state: st.session_state[k] = v
-
-    # 4. ユーザーデータ取得
+    # ユーザーデータ取得
     user = get_user_data(st.session_state["username"])
     if not user:
         st.session_state["logged_in"] = False
         st.rerun()
 
-    # 5. 集中モード表示
-    if st.session_state["is_studying"]:
-        st.markdown(f"### 🔥 {st.session_state['current_subject']} を勉強中...")
-        elapsed = int(time.time() - st.session_state["start_time"])
+    # 集中モード表示 (.get()を使ってエラーを物理的に防ぐ)
+    if st.session_state.get("is_studying", False):
+        st.markdown(f"### 🔥 {st.session_state.get('current_subject', '勉強')} を勉強中...")
+        elapsed = int(time.time() - st.session_state.get("start_time", time.time()))
         st.markdown(f'<div style="text-align:center; font-size:80px; font-weight:bold; color:#FF4B4B;">{elapsed//3600:02}:{(elapsed%3600)//60:02}:{elapsed%60:02}</div>', unsafe_allow_html=True)
         if st.button("⏹️ 終了して記録", type="primary", use_container_width=True):
             mins = max(1, elapsed // 60)
-            add_study_log(user['username'], st.session_state["current_subject"], mins)
+            add_study_log(user['username'], st.session_state.get("current_subject", "自習"), mins)
             st.session_state["is_studying"] = False
             st.session_state["celebrate"] = True
             st.session_state["toast_msg"] = f"{mins}分 完了！お疲れ様！"
@@ -216,11 +211,12 @@ def main():
         st.rerun()
         return
 
-    # 6. 通常画面
+    # 通常画面のデザイン適用
     apply_font(user.get('unlocked_themes', '標準').split(',')[0])
-    apply_wallpaper(user.get('current_wallpaper', 'シンプル'))
+    apply_wallpaper(user.get('current_wallpaper', '草原'))
     
-    if st.session_state.get("celebrate"):
+    # お祝い演出 (.get()を使用)
+    if st.session_state.get("celebrate", False):
         st.balloons()
         st.session_state["celebrate"] = False
     if st.session_state.get("toast_msg"):
@@ -235,8 +231,6 @@ def main():
             st.session_state["logged_in"] = False
             st.rerun()
         st.divider()
-        st.write("🔧 デザイン調整")
-        bg_op = st.slider("壁紙の暗さ", 0.0, 1.0, 0.4)
         wall_list = user['unlocked_wallpapers'].split(',')
         new_wall = st.selectbox("壁紙変更", wall_list, index=wall_list.index(user['current_wallpaper']) if user['current_wallpaper'] in wall_list else 0)
         if new_wall != user['current_wallpaper']:
@@ -257,7 +251,7 @@ def main():
         col_a, col_b = st.columns([0.6, 0.4])
         with col_a:
             with st.expander("➕ タスク追加"):
-                with st.form("at"):
+                with st.form("add_t"):
                     n = st.text_input("タスク名")
                     d = st.date_input("期限")
                     if st.form_submit_button("追加"):
@@ -274,13 +268,10 @@ def main():
                         delete_task(r['id'])
                         st.rerun()
         with col_b:
-            logs = get_study_logs(user['username'])
-            # カレンダー (簡易版)
             events = [{"title": f"📝 {r['task_name']}", "start": r['due_date']} for _, r in tasks.iterrows()]
             calendar(events=events, options={"initialView": "dayGridMonth"}, key="cal")
 
     with t2:
-        st.subheader("勉強タイマー")
         subj = st.text_input("何を勉強する？", key="timer_subj")
         if st.button("▶️ スタート", type="primary"):
             if subj:
@@ -291,7 +282,6 @@ def main():
             else: st.warning("教科を入力してください")
         
         st.divider()
-        st.write("📖 最近の記録")
         logs = get_study_logs(user['username'])
         if not logs.empty:
             for _, r in logs.head(5).iterrows():
@@ -304,20 +294,21 @@ def main():
     with t3:
         st.subheader("🏆 週間ランキング")
         start = (datetime.now(JST) - timedelta(days=7)).strftime('%Y-%m-%d')
-        rank_data = supabase.table("study_logs").select("username, duration_minutes").gte("study_date", start).execute()
-        if rank_data.data:
-            df_r = pd.DataFrame(rank_data.data).groupby('username').sum().sort_values('duration_minutes', ascending=False)
+        res = supabase.table("study_logs").select("username, duration_minutes").gte("study_date", start).execute()
+        if res.data:
+            df_r = pd.DataFrame(res.data).groupby('username').sum().sort_values('duration_minutes', ascending=False)
             st.table(df_r)
         else: st.info("データがありません")
 
     with t4:
         st.subheader("🛒 ショップ")
-        items = [("草原", 500), ("夕焼け", 800), ("夜空", 1000), ("ダンジョン", 1500)]
+        items = [("草原", 0), ("夕焼け", 800), ("夜空", 1000), ("ダンジョン", 1500), ("王宮", 2000), ("図書館", 1200), ("サイバー", 1800)]
         for name, price in items:
+            if price == 0: continue
             with st.container(border=True):
                 st.write(f"🖼️ 壁紙: {name} ({price}💰)")
                 if name in user['unlocked_wallpapers'].split(','):
-                    st.button("✅ 所有済み", disabled=True, key=f"bought_{name}")
+                    st.button("所有済み", disabled=True, key=f"b_{name}")
                 else:
                     if st.button(f"購入", key=f"buy_{name}"):
                         if user['coins'] >= price:
