@@ -1,10 +1,9 @@
 import streamlit as st
-from supabase import create_client, Client
+from supabase import create_client
 import pandas as pd
 import random
 import time
 from datetime import datetime, date, timedelta, timezone
-import urllib.parse
 import hashlib
 import altair as alt
 from streamlit_calendar import calendar
@@ -148,9 +147,6 @@ def complete_tasks_bulk(ids, username, amount):
         "coins": u["coins"] + amount
     }).eq("username", username).execute()
 
-def delete_task(tid):
-    supabase.table("tasks").delete().eq("id", tid).execute()
-
 def add_study_log(username, subj, mins):
     today = datetime.now(JST).strftime("%Y-%m-%d")
     supabase.table("study_logs").insert({
@@ -165,24 +161,11 @@ def add_study_log(username, subj, mins):
         "coins": u["coins"] + mins
     }).eq("username", username).execute()
 
-def delete_study_log(lid, username, mins):
-    supabase.table("study_logs").delete().eq("id", lid).execute()
-    u = get_user_data(username)
-    supabase.table("users").update({
-        "xp": max(0, u["xp"] - mins),
-        "coins": max(0, u["coins"] - mins)
-    }).eq("username", username).execute()
-
-def get_study_logs(username):
-    res = supabase.table("study_logs").select("*").eq("username", username).execute()
-    df = pd.DataFrame(res.data)
-    return df.sort_values("created_at", ascending=False) if not df.empty else df
-
 # --- メイン ---
 def main():
 
-    # ★ session_state 完全初期化（KeyError撲滅）
-    defaults = {
+    # 🔒 session_state 完全初期化（最優先）
+    for k, v in {
         "logged_in": False,
         "username": "",
         "is_studying": False,
@@ -191,12 +174,12 @@ def main():
         "start_time": None,
         "current_subject": "",
         "last_cal_event": None
-    }
-    for k, v in defaults.items():
-        st.session_state.setdefault(k, v)
+    }.items():
+        if k not in st.session_state:
+            st.session_state[k] = v
 
-    # ログイン
-    if not st.session_state["logged_in"]:
+    # --- ログイン ---
+    if not st.session_state.get("logged_in"):
         st.sidebar.title("🔐 ログイン")
         mode = st.sidebar.selectbox("メニュー", ["ログイン", "新規登録"])
 
@@ -235,7 +218,7 @@ def main():
         )
         if st.button("⏹ 終了"):
             mins = max(1, elapsed // 60)
-            add_study_log(user["username"], st.session_state["current_subject"], mins)
+            add_study_log(user["username"], st.session_state.get("current_subject"), mins)
             st.session_state["is_studying"] = False
             st.session_state["celebrate"] = True
             st.session_state["toast_msg"] = f"{mins}分お疲れ様！"
@@ -247,7 +230,7 @@ def main():
     apply_font(user["unlocked_themes"].split(",")[0])
     apply_wallpaper(user["current_wallpaper"])
 
-    if st.session_state.get("celebrate"):
+    if st.session_state.get("celebrate", False):
         st.balloons()
         st.session_state["celebrate"] = False
 
