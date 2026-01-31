@@ -15,38 +15,6 @@ st.set_page_config(page_title="褒めてくれる勉強時間・タスク管理�
 # --- 日本時間 (JST) の定義 ---
 JST = timezone(timedelta(hours=9))
 
-# --- セッションステート初期化 (強力版) ---
-# 必要な変数がなければ確実にデフォルト値を入れる
-defaults = {
-    "toast_msg": None,
-    "is_studying": False,
-    "start_time": None,
-    "last_cal_event": None,
-    "selected_date": None,
-    "current_subject": "",
-    "celebrate": False, # ここでFalseにしておく
-    "calendar_key_uid": 0,
-    "calendar_initial_date": datetime.now(JST).strftime('%Y-%m-%d')
-}
-
-for key, val in defaults.items():
-    if key not in st.session_state:
-        st.session_state[key] = val
-
-# トースト通知表示
-if st.session_state.get("toast_msg"):
-    st.toast(st.session_state["toast_msg"], icon="🆙")
-    st.session_state["toast_msg"] = None 
-
-st.title("✅ 褒めてくれる勉強時間・タスク管理アプリ")
-
-# 称号ガチャのリスト
-GACHA_TITLES = [
-    "駆け出し冒険者", "夜更かしの達人", "努力の天才", "タスクスレイヤー",
-    "週末の戦士", "無限の集中力", "数学の悪魔", "コードの魔術師",
-    "文房具マスター", "伝説の勇者", "睡眠不足の神", "カフェイン中毒"
-]
-
 # --- Supabase接続設定 ---
 @st.cache_resource
 def init_supabase():
@@ -402,6 +370,13 @@ def buy_custom_title_rights(username, cost):
         return True, new_coins
     return False, current_coins
 
+# 称号ガチャリスト
+GACHA_TITLES = [
+    "駆け出し冒険者", "夜更かしの達人", "努力の天才", "タスクスレイヤー",
+    "週末の戦士", "無限の集中力", "数学の悪魔", "コードの魔術師",
+    "文房具マスター", "伝説の勇者", "睡眠不足の神", "カフェイン中毒"
+]
+
 def play_gacha(username, cost):
     user_data = get_user_data(username)
     current_coins = user_data.get('coins', 0)
@@ -550,7 +525,7 @@ def render_calendar_and_details(df_tasks, df_logs, unique_key, username):
     
     cal_data = calendar(events=events, options=cal_options, callbacks=['dateClick', 'select', 'eventClick'], key=unique_key)
     
-    if cal_data and cal_data != st.session_state["last_cal_event"]:
+    if cal_data and cal_data != st.session_state.get("last_cal_event"):
         st.session_state["last_cal_event"] = cal_data
         raw_date_str = None
         if "dateClick" in cal_data:
@@ -604,9 +579,22 @@ def render_daily_task_list(df_tasks, unique_key):
 
 # --- メイン処理 ---
 def main():
+    # ★重要: 安全な初期化ブロック
     if "logged_in" not in st.session_state:
         st.session_state["logged_in"] = False
+    if "username" not in st.session_state:
         st.session_state["username"] = ""
+    # エラー回避: 変数がなければFalseを入れる
+    if "is_studying" not in st.session_state:
+        st.session_state["is_studying"] = False
+    if "celebrate" not in st.session_state:
+        st.session_state["celebrate"] = False
+    if "start_time" not in st.session_state:
+        st.session_state["start_time"] = None
+    if "current_subject" not in st.session_state:
+        st.session_state["current_subject"] = ""
+
+    st.title("✅ 褒めてくれる勉強時間・タスク管理アプリ")
 
     # === ログイン画面 ===
     if not st.session_state["logged_in"]:
@@ -731,18 +719,20 @@ def main():
                     st.rerun()
 
     # === ★重要: 勉強中モード (待機画面) ===
-    if st.session_state["is_studying"]:
-        st.markdown(f"### 🔥 {st.session_state['current_subject']} を勉強中...")
+    # .get() を使って安全にアクセス
+    if st.session_state.get("is_studying", False):
+        st.markdown(f"### 🔥 {st.session_state.get('current_subject', '勉強')} を勉強中...")
         
-        # 経過時間計算
         now = time.time()
-        elapsed_sec = int(now - st.session_state["start_time"])
+        start = st.session_state.get("start_time", now)
+        if start is None: start = now # 安全策
+        
+        elapsed_sec = int(now - start)
         h = elapsed_sec // 3600
         m = (elapsed_sec % 3600) // 60
         s = elapsed_sec % 60
         time_str = f"{h:02}:{m:02}:{s:02}"
         
-        # デジタル時計風表示
         st.markdown(f"""
         <div style="
             text-align: center; 
@@ -759,14 +749,13 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        # 終了ボタン
         col_c1, col_c2, col_c3 = st.columns([1, 2, 1])
         with col_c2:
             if st.button("⏹️ 終了して記録", type="primary", use_container_width=True):
                 duration_min = max(1, elapsed_sec // 60)
-                # 記録保存
-                add_study_log(current_user, st.session_state["current_subject"], duration_min)
-                # リセット
+                subj = st.session_state.get("current_subject", "自習")
+                add_study_log(current_user, subj, duration_min)
+                
                 st.session_state["is_studying"] = False
                 st.session_state["start_time"] = None
                 st.session_state["current_subject"] = ""
@@ -774,14 +763,11 @@ def main():
                 st.session_state["toast_msg"] = f"{duration_min}分 勉強しました！お疲れ様！"
                 st.rerun()
         
-        # 自動リフレッシュ (1秒後に再実行)
         time.sleep(1)
         st.rerun()
-        return # ここで画面描画を止めて他の要素を表示しない
+        return
 
     # --- 通常画面 ---
-    
-    # ステータス表示
     level = (xp // 50) + 1
     next_level_xp = level * 50
     xp_needed = next_level_xp - xp
@@ -795,7 +781,7 @@ def main():
         c4.write(f"Next Lv: **{xp_needed} XP**")
         c4.progress(max(0.0, min(1.0, progress_val)))
 
-    # エラーになっていた箇所 (修正済み)
+    # ★エラー回避修正 (.getを使用)
     if st.session_state.get("celebrate", False):
         st.balloons()
         st.session_state["celebrate"] = False
