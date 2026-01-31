@@ -15,25 +15,26 @@ st.set_page_config(page_title="褒めてくれる勉強時間・タスク管理�
 # --- 日本時間 (JST) の定義 ---
 JST = timezone(timedelta(hours=9))
 
-# --- セッションステート初期化 (エラー修正済み★) ---
-if "toast_msg" not in st.session_state:
-    st.session_state["toast_msg"] = None
-if "is_studying" not in st.session_state:
-    st.session_state["is_studying"] = False
-if "start_time" not in st.session_state:
-    st.session_state["start_time"] = None
-if "last_cal_event" not in st.session_state:
-    st.session_state["last_cal_event"] = None
-if "selected_date" not in st.session_state:
-    st.session_state["selected_date"] = None
-if "current_subject" not in st.session_state:
-    st.session_state["current_subject"] = ""
-# ★ここを追加しました！これでKeyErrorが直ります
-if "celebrate" not in st.session_state:
-    st.session_state["celebrate"] = False
+# --- セッションステート初期化 (強力版) ---
+# 必要な変数がなければ確実にデフォルト値を入れる
+defaults = {
+    "toast_msg": None,
+    "is_studying": False,
+    "start_time": None,
+    "last_cal_event": None,
+    "selected_date": None,
+    "current_subject": "",
+    "celebrate": False, # ここでFalseにしておく
+    "calendar_key_uid": 0,
+    "calendar_initial_date": datetime.now(JST).strftime('%Y-%m-%d')
+}
+
+for key, val in defaults.items():
+    if key not in st.session_state:
+        st.session_state[key] = val
 
 # トースト通知表示
-if st.session_state["toast_msg"]:
+if st.session_state.get("toast_msg"):
     st.toast(st.session_state["toast_msg"], icon="🆙")
     st.session_state["toast_msg"] = None 
 
@@ -795,7 +796,7 @@ def main():
         c4.progress(max(0.0, min(1.0, progress_val)))
 
     # エラーになっていた箇所 (修正済み)
-    if st.session_state["celebrate"]:
+    if st.session_state.get("celebrate", False):
         st.balloons()
         st.session_state["celebrate"] = False
 
