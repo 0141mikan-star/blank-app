@@ -36,7 +36,7 @@ def image_to_base64(img):
     return base64.b64encode(buffered.getvalue()).decode()
 
 # --- デザイン適用関数 ---
-def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_opacity=0.4):
+def apply_design(user_theme="標準", wallpaper="書斎", custom_data=None, bg_opacity=0.4):
     fonts = {
         "ピクセル風": "'DotGothic16', sans-serif",
         "手書き風": "'Yomogi', cursive",
@@ -60,15 +60,15 @@ def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_o
     elif wallpaper == "真っ黒":
         bg_style = "background-color: #000000;"
     else:
-        # デフォルトは草原などの画像
+        # デフォルトは書斎などの画像
         wallpapers = {
-            "草原": "1472214103451-9374bd1c798e", "夕焼け": "1472120435266-53107fd0c44a",
+            "書斎": "1481627834876-b7833e8b5570", "夕焼け": "1472120435266-53107fd0c44a",
             "夜空": "1462331940025-496dfbfc7564", "ダンジョン": "1518709268805-4e9042af9f23",
             "王宮": "1544939514-aa98d908bc47", "図書館": "1521587760476-6c12a4b040da",
             "サイバー": "1535295972055-1c762f4483e5"
         }
-        # 指定がない、または辞書にない場合は「草原」をデフォルトにする
-        if wallpaper not in wallpapers: wallpaper = "草原"
+        # 指定がない、または辞書にない場合は「書斎」をデフォルトにする
+        if wallpaper not in wallpapers: wallpaper = "書斎"
         
         img_id = wallpapers.get(wallpaper, "")
         if img_id:
@@ -179,14 +179,13 @@ def login_user(username, password):
 
 def add_user(username, password, nickname):
     try:
-        # ★初期設定: 壁紙="草原"
+        # ★初期設定: 壁紙="書斎"
         data = {
             "username": username, "password": make_hashes(password), "nickname": nickname,
             "xp": 0, "coins": 0, 
             "unlocked_themes": "標準", "current_theme": "標準",
             "current_title": "見習い", "unlocked_titles": "見習い", 
-            "current_wallpaper": "草原", "unlocked_wallpapers": "草原", 
-            # BGM関連はデフォルト値なし
+            "current_wallpaper": "書斎", "unlocked_wallpapers": "書斎", 
             "custom_title_unlocked": False, "custom_wallpaper_unlocked": False,
             "custom_bg_data": None,
             "daily_goal": 60, "last_goal_reward_date": None, "last_login_date": None
@@ -335,10 +334,10 @@ def main():
     user = get_user_data(st.session_state["username"])
     if not user: st.session_state["logged_in"] = False; st.rerun()
 
-    # 自動移行: 真っ黒→草原 (初期化)
+    # 自動移行: 真っ黒→書斎 (初期化)
     if user.get('current_wallpaper') == "真っ黒":
-        supabase.table("users").update({"current_wallpaper": "草原"}).eq("username", user['username']).execute()
-        user['current_wallpaper'] = "草原"
+        supabase.table("users").update({"current_wallpaper": "書斎"}).eq("username", user['username']).execute()
+        user['current_wallpaper'] = "書斎"
         st.rerun()
 
     # ★ログインボーナス判定★
@@ -354,7 +353,7 @@ def main():
         user['coins'] = new_coins
 
     # デザイン適用
-    apply_design(user.get('current_theme', '標準'), user.get('current_wallpaper', '草原'), user.get('custom_bg_data'))
+    apply_design(user.get('current_theme', '標準'), user.get('current_wallpaper', '書斎'), user.get('custom_bg_data'))
 
     # ★ 集中モード (BGM無し)
     if st.session_state["is_studying"]:
@@ -410,7 +409,7 @@ def main():
         
         st.divider()
 
-        # 壁紙設定 (草原、プリセット、カスタム)
+        # 壁紙設定 (書斎、プリセット、カスタム)
         walls = user['unlocked_wallpapers'].split(',')
         if "真っ黒" in walls: walls.remove("真っ黒") # 真っ黒はリストから消す
         
@@ -428,15 +427,15 @@ def main():
                         st.success("更新しました！"); time.sleep(1); st.rerun()
                 elif user.get('current_wallpaper') == 'カスタム': st.success("カスタム画像適用中")
             else:
-                current_w = user.get('current_wallpaper', '草原')
-                if current_w == 'カスタム' or current_w == '真っ黒': current_w = "草原"
+                current_w = user.get('current_wallpaper', '書斎')
+                if current_w == 'カスタム' or current_w == '真っ黒': current_w = "書斎"
                 new_w = st.selectbox("壁紙", walls, index=walls.index(current_w) if current_w in walls else 0)
                 if new_w != user.get('current_wallpaper'):
                     supabase.table("users").update({"current_wallpaper": new_w}).eq("username", user['username']).execute()
                     st.rerun()
         else:
-            current_w = user.get('current_wallpaper', '草原')
-            if current_w == '真っ黒': current_w = "草原"
+            current_w = user.get('current_wallpaper', '書斎')
+            if current_w == '真っ黒': current_w = "書斎"
             new_w = st.selectbox("壁紙", walls, index=walls.index(current_w) if current_w in walls else 0)
             if new_w != user.get('current_wallpaper'):
                 supabase.table("users").update({"current_wallpaper": new_w}).eq("username", user['username']).execute()
