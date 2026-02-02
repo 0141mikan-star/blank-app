@@ -17,16 +17,6 @@ st.set_page_config(page_title="褒めてくれる勉強時間・タスク管理�
 # --- 日本時間 (JST) の定義 ---
 JST = timezone(timedelta(hours=9))
 
-# --- BGMデータ ---
-BGM_DATA = {
-    "なし": None,
-    "雨の音": {"url": "https://upload.wikimedia.org/wikipedia/commons/8/8f/Rain_falling_on_leaves.ogg", "type": "audio/ogg"},
-    "焚き火": {"url": "https://upload.wikimedia.org/wikipedia/commons/6/66/Fire_crackling_sound_effect.ogg", "type": "audio/ogg"},
-    "カフェ": {"url": "https://upload.wikimedia.org/wikipedia/commons/5/52/Cafeteria_noise.ogg", "type": "audio/ogg"},
-    "川のせせらぎ": {"url": "https://upload.wikimedia.org/wikipedia/commons/5/54/River_Snoring_Forest_Nature_Sounds.ogg", "type": "audio/ogg"},
-    "ホワイトノイズ": {"url": "https://upload.wikimedia.org/wikipedia/commons/9/98/White_Noise.ogg", "type": "audio/ogg"}
-}
-
 # --- Supabase接続設定 ---
 @st.cache_resource
 def init_supabase():
@@ -46,7 +36,7 @@ def image_to_base64(img):
     return base64.b64encode(buffered.getvalue()).decode()
 
 # --- デザイン適用関数 ---
-def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_opacity=0.4):
+def apply_design(user_theme="標準", wallpaper="真っ黒", custom_data=None, bg_opacity=0.4):
     fonts = {
         "ピクセル風": "'DotGothic16', sans-serif",
         "手書き風": "'Yomogi', cursive",
@@ -121,7 +111,6 @@ def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_o
 
     /* メイン画面のフォント設定 */
     html, body, [class*="css"] {{ font-family: {font_family} !important; }}
-    /* メインエリアの文字は白 */
     .main .stMarkdown, .main .stText, .main h1, .main h2, .main h3, .main p, .main span {{ 
         color: #ffffff !important; 
         text-shadow: none; 
@@ -181,13 +170,13 @@ def login_user(username, password):
 
 def add_user(username, password, nickname):
     try:
+        # BGM関連のカラムはSQLで作成済みなので、Python側では指定せずデフォルト値に任せる
         data = {
             "username": username, "password": make_hashes(password), "nickname": nickname,
             "xp": 0, "coins": 0, 
             "unlocked_themes": "標準", "current_theme": "標準",
             "current_title": "見習い", "unlocked_titles": "見習い", 
             "current_wallpaper": "草原", "unlocked_wallpapers": "草原", 
-            "current_bgm": "なし", "unlocked_bgm": "なし", 
             "custom_title_unlocked": False, "custom_wallpaper_unlocked": False,
             "custom_bg_data": None,
             "daily_goal": 60, "last_goal_reward_date": None, "last_login_date": None
@@ -225,12 +214,10 @@ def get_subjects(username):
 def add_subject_db(u, s): supabase.table("subjects").insert({"username": u, "subject_name": s}).execute()
 def delete_subject_db(u, s): supabase.table("subjects").delete().eq("username", u).eq("subject_name", s).execute()
 
-# ★記録と同時に目標達成チェックを行う関数★
 def add_study_log(u, s, m, d):
     # ログ追加
     supabase.table("study_logs").insert({"username": u, "subject": s, "duration_minutes": m, "study_date": str(d)}).execute()
     
-    # ユーザー情報取得
     ud = get_user_data(u)
     if not ud: return m, 0, 0, False
 
@@ -248,7 +235,6 @@ def add_study_log(u, s, m, d):
     goal = ud.get('daily_goal', 60)
     last_reward = ud.get('last_goal_reward_date')
     
-    # 「今日まだ報酬をもらっていない」かつ「目標を超えた」場合
     if last_reward != today_str and total_today >= goal:
         new_coins += 100 # ボーナス
         supabase.table("users").update({
@@ -339,7 +325,7 @@ def main():
     user = get_user_data(st.session_state["username"])
     if not user: st.session_state["logged_in"] = False; st.rerun()
 
-    # 自動移行: 草原→真っ黒
+    # 自動移行: 草原→真っ黒 (救済措置)
     if user.get('current_wallpaper') == "草原" and "真っ黒" not in user.get('unlocked_wallpapers', ''):
         supabase.table("users").update({
             "current_wallpaper": "真っ黒", 
@@ -357,21 +343,15 @@ def main():
             "last_login_date": today_str
         }).eq("username", user['username']).execute()
         st.toast("🎁 ログインボーナス！ +50コイン GET！", icon="🎁")
-        time.sleep(1) # 通知を見せるため少し待つ
-        user['coins'] = new_coins # 画面表示用に即反映
+        time.sleep(1)
+        user['coins'] = new_coins
 
     # デザイン適用
     apply_design(user.get('current_theme', '標準'), user.get('current_wallpaper', '真っ黒'), user.get('custom_bg_data'))
 
-    # BGM再生
+    # ★ 集中モード (BGM無し版)
     if st.session_state["is_studying"]:
         st.empty()
-        bgm_key = user.get('current_bgm', 'なし')
-        if bgm_key != 'なし' and BGM_DATA.get(bgm_key):
-            bgm_info = BGM_DATA[bgm_key]
-            st.warning("🎵 音が鳴らない場合は再生ボタンを押してください")
-            st.audio(bgm_info["url"], format=bgm_info["type"], loop=True, autoplay=True)
-            
         st.markdown(f"<h1 style='text-align: center; font-size: 3em;'>🔥 {st.session_state.get('current_subject', '勉強')} 中...</h1>", unsafe_allow_html=True)
         show_timer_fragment(user['username'])
         return
@@ -383,7 +363,7 @@ def main():
         logs_df['d'] = logs_df['study_date'].astype(str).str.split("T").str[0]
         today_mins = logs_df[logs_df['d'] == str(date.today())]['duration_minutes'].sum()
 
-    # ★HUD (目標バー追加)★
+    # ★HUD
     level = (user['xp'] // 100) + 1
     next_xp = level * 100
     goal = user.get('daily_goal', 60)
@@ -402,7 +382,6 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # 目標進捗バー
     st.progress(goal_progress)
     if today_mins >= goal and goal > 0:
         if user.get('last_goal_reward_date') == str(date.today()):
@@ -414,7 +393,7 @@ def main():
     with st.sidebar:
         st.subheader("⚙️ 設定")
         
-        # ★目標設定追加
+        # 目標設定
         st.markdown("##### 🎯 1日の目標")
         new_goal = st.number_input("目標時間(分)", min_value=10, max_value=600, value=user.get('daily_goal', 60), step=10)
         if new_goal != user.get('daily_goal', 60):
@@ -460,14 +439,6 @@ def main():
         new_t = st.selectbox("フォント", themes, index=themes.index(user.get('current_theme', '標準')) if user.get('current_theme') in themes else 0)
         if new_t != user.get('current_theme'):
             supabase.table("users").update({"current_theme": new_t}).eq("username", user['username']).execute()
-            st.rerun()
-
-        # BGM設定
-        bgms = user.get('unlocked_bgm', 'なし').split(',')
-        if 'なし' not in bgms: bgms.insert(0, 'なし')
-        new_b = st.selectbox("集中BGM設定", bgms, index=bgms.index(user.get('current_bgm', 'なし')) if user.get('current_bgm') in bgms else 0)
-        if new_b != user.get('current_bgm'):
-            supabase.table("users").update({"current_bgm": new_b}).eq("username", user['username']).execute()
             st.rerun()
             
         with st.expander("👑 称号コレクション"):
@@ -683,26 +654,6 @@ def main():
                             if user['coins'] >= p:
                                 nl = user['unlocked_wallpapers'] + f",{n}"
                                 supabase.table("users").update({"coins": user['coins']-p, "unlocked_wallpapers": nl}).eq("username", user['username']).execute()
-                                st.balloons(); st.rerun()
-                            else: st.error("コイン不足")
-
-        st.markdown("### 🎵 BGM")
-        items = [("雨の音", 300), ("焚き火", 500), ("カフェ", 800)]
-        cols = st.columns(3)
-        my_bgms = user.get('unlocked_bgm', 'なし')
-        for i, (n, p) in enumerate(items):
-            with cols[i % 3]:
-                with st.container(border=True):
-                    st.markdown(f"<div class='shop-title'>{n}</div>", unsafe_allow_html=True)
-                    if n in my_bgms:
-                        st.markdown(f"<span class='shop-owned'>所有済み</span>", unsafe_allow_html=True)
-                        st.button("設定へ", disabled=True, key=f"db_{n}")
-                    else:
-                        st.markdown(f"<div class='shop-price'>{p} G</div>", unsafe_allow_html=True)
-                        if st.button("購入", key=f"buy_b_{n}", use_container_width=True):
-                            if user['coins'] >= p:
-                                nl = my_bgms + f",{n}"
-                                supabase.table("users").update({"coins": user['coins']-p, "unlocked_bgm": nl}).eq("username", user['username']).execute()
                                 st.balloons(); st.rerun()
                             else: st.error("コイン不足")
 
