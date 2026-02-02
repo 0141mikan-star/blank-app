@@ -606,9 +606,6 @@ def main():
                 </div>
                 """, unsafe_allow_html=True)
         else: st.info("データなし")
-
-    with t5: # ショップ (BGM完全削除)
-        st.write("アイテムを購入してカスタマイズしよう！")
         
         st.markdown("### 🅰️ フォント")
         font_items = [("ピクセル風", 500), ("手書き風", 800), ("ポップ", 1000), ("明朝体", 1200), ("筆文字", 1500)]
