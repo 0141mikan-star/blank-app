@@ -36,7 +36,7 @@ def image_to_base64(img):
     return base64.b64encode(buffered.getvalue()).decode()
 
 # --- デザイン適用関数 ---
-def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_opacity=0.4):
+def apply_design(user_theme="標準", wallpaper="真っ黒", custom_data=None, bg_opacity=0.4):
     fonts = {
         "ピクセル風": "'DotGothic16', sans-serif",
         "手書き風": "'Yomogi', cursive",
@@ -48,7 +48,10 @@ def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_o
     font_family = fonts.get(user_theme, "sans-serif")
     
     # 背景CSS設定
-    bg_style = ""
+    bg_style = """
+        background-color: #000000 !important;
+        background-image: none !important;
+    """
     
     if wallpaper == "カスタム" and custom_data:
         bg_style = f"""
@@ -57,27 +60,21 @@ def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_o
             background-size: cover !important;
             background-position: center !important;
         """
-    elif wallpaper == "真っ黒":
-        # 移行期間用のフォールバック（基本は草原になるはず）
-        bg_style = "background-color: #000000 !important;"
-    else:
-        # デフォルトは草原などの画像
+    elif wallpaper != "真っ黒":
         wallpapers = {
             "草原": "1472214103451-9374bd1c798e", "夕焼け": "1472120435266-53107fd0c44a",
             "夜空": "1462331940025-496dfbfc7564", "ダンジョン": "1518709268805-4e9042af9f23",
             "王宮": "1544939514-aa98d908bc47", "図書館": "1521587760476-6c12a4b040da",
             "サイバー": "1535295972055-1c762f4483e5"
         }
-        # 指定がない、または辞書にない場合は「草原」をデフォルトにする
-        target_wp = wallpaper if wallpaper in wallpapers else "草原"
-        img_id = wallpapers[target_wp]
-        
-        bg_url = f"https://images.unsplash.com/photo-{img_id}?auto=format&fit=crop&w=1920&q=80"
-        bg_style = f"""
-            background-image: linear-gradient(rgba(0,0,0,{bg_opacity}), rgba(0,0,0,{bg_opacity})), url("{bg_url}") !important;
-            background-attachment: fixed !important;
-            background-size: cover !important;
-        """
+        if wallpaper in wallpapers:
+            img_id = wallpapers[wallpaper]
+            bg_url = f"https://images.unsplash.com/photo-{img_id}?auto=format&fit=crop&w=1920&q=80"
+            bg_style = f"""
+                background-image: linear-gradient(rgba(0,0,0,{bg_opacity}), rgba(0,0,0,{bg_opacity})), url("{bg_url}") !important;
+                background-attachment: fixed !important;
+                background-size: cover !important;
+            """
 
     st.markdown(f"""
     <style>
@@ -93,38 +90,30 @@ def apply_design(user_theme="標準", wallpaper="草原", custom_data=None, bg_o
         background-color: rgba(0,0,0,0);
     }}
 
-    /* サイドバーのデザイン調整 */
+    /* サイドバー修正: 背景黒、文字白、入力欄は標準 */
     [data-testid="stSidebar"] {{
         background-color: #1a1a1a !important;
         border-right: 1px solid #333;
     }}
-    /* 見出しとラベルは白 */
-    [data-testid="stSidebar"] h1, 
-    [data-testid="stSidebar"] h2, 
-    [data-testid="stSidebar"] h3, 
-    [data-testid="stSidebar"] p, 
-    [data-testid="stSidebar"] label,
-    [data-testid="stSidebar"] .stMarkdown {{
+    [data-testid="stSidebar"] h1, [data-testid="stSidebar"] h2, [data-testid="stSidebar"] h3, 
+    [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] .stMarkdown {{
         color: #ffffff !important;
     }}
-    /* 入力ボックスの中身はブラウザ標準（黒） */
-    [data-testid="stSidebar"] input, 
-    [data-testid="stSidebar"] select, 
-    [data-testid="stSidebar"] div[data-baseweb="select"] span {{
+    /* 入力フォームの文字色は継承（ブラウザ標準） */
+    [data-testid="stSidebar"] input, [data-testid="stSidebar"] select, [data-testid="stSidebar"] div[data-baseweb="select"] span {{
         color: inherit !important; 
     }}
 
-    /* メイン画面のフォント設定 */
+    /* メイン画面フォント */
     html, body, [class*="css"] {{ font-family: {font_family} !important; }}
-    /* メインエリアの文字は白 */
     .main .stMarkdown, .main .stText, .main h1, .main h2, .main h3, .main p, .main span {{ 
         color: #ffffff !important; 
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.8);
+        text-shadow: none;
     }}
     
     /* カードコンテナ */
     div[data-testid="stVerticalBlockBorderWrapper"], div[data-testid="stExpander"], div[data-testid="stForm"] {{
-        background-color: rgba(30, 30, 30, 0.85);
+        background-color: rgba(30, 30, 30, 0.9) !important;
         border-radius: 15px; padding: 20px; border: 1px solid rgba(255,255,255,0.15);
         box-shadow: 0 4px 15px rgba(0,0,0,0.5); backdrop-filter: blur(5px);
     }}
@@ -179,13 +168,13 @@ def login_user(username, password):
 
 def add_user(username, password, nickname):
     try:
-        # ★BGMデータを完全削除し、初期壁紙を「草原」に設定★
+        # ★BGM完全削除＆初期壁紙「真っ黒」★
         data = {
             "username": username, "password": make_hashes(password), "nickname": nickname,
             "xp": 0, "coins": 0, 
             "unlocked_themes": "標準", "current_theme": "標準",
             "current_title": "見習い", "unlocked_titles": "見習い", 
-            "current_wallpaper": "草原", "unlocked_wallpapers": "草原", 
+            "current_wallpaper": "真っ黒", "unlocked_wallpapers": "真っ黒", 
             "custom_title_unlocked": False, "custom_wallpaper_unlocked": False,
             "custom_bg_data": None,
             "daily_goal": 60, "last_goal_reward_date": None, "last_login_date": None
@@ -230,26 +219,21 @@ def add_study_log(u, s, m, d):
     ud = get_user_data(u)
     if not ud: return m, 0, 0, False
 
-    # 本日の合計時間を計算
     today_str = str(date.today())
     logs = supabase.table("study_logs").select("duration_minutes").eq("username", u).eq("study_date", today_str).execute()
     total_today = sum([l['duration_minutes'] for l in logs.data]) if logs.data else m
     
-    # 基本報酬加算
     new_xp = ud['xp'] + m
     new_coins = ud['coins'] + m
     
-    # 目標達成チェック
     goal_reached = False
     goal = ud.get('daily_goal', 60)
     last_reward = ud.get('last_goal_reward_date')
     
     if last_reward != today_str and total_today >= goal:
-        new_coins += 100 # ボーナス
+        new_coins += 100
         supabase.table("users").update({
-            "xp": new_xp, 
-            "coins": new_coins,
-            "last_goal_reward_date": today_str
+            "xp": new_xp, "coins": new_coins, "last_goal_reward_date": today_str
         }).eq("username", u).execute()
         goal_reached = True
     else:
@@ -334,16 +318,10 @@ def main():
     user = get_user_data(st.session_state["username"])
     if not user: st.session_state["logged_in"] = False; st.rerun()
 
-    # 自動移行: 「真っ黒」などの不要な壁紙設定が残っていたら「草原」に戻す
-    if user.get('current_wallpaper') in ["真っ黒", "書斎"] or "真っ黒" in user.get('unlocked_wallpapers', ''):
-        clean_wallpapers = user.get('unlocked_wallpapers', '').replace('真っ黒', '').replace('書斎', '').replace(',,', ',').strip(',')
-        if "草原" not in clean_wallpapers: clean_wallpapers = "草原," + clean_wallpapers
-        
-        supabase.table("users").update({
-            "current_wallpaper": "草原", 
-            "unlocked_wallpapers": clean_wallpapers
-        }).eq("username", user['username']).execute()
-        user['current_wallpaper'] = "草原"
+    # 自動移行: 「草原」などの設定が残っていたら「真っ黒」に書き換える（初期化）
+    if user.get('current_wallpaper') == "草原" and "草原" in user.get('unlocked_wallpapers', ''):
+        supabase.table("users").update({"current_wallpaper": "真っ黒"}).eq("username", user['username']).execute()
+        user['current_wallpaper'] = "真っ黒"
         st.rerun()
 
     # ★ログインボーナス判定★
@@ -359,9 +337,9 @@ def main():
         user['coins'] = new_coins
 
     # デザイン適用
-    apply_design(user.get('current_theme', '標準'), user.get('current_wallpaper', '草原'), user.get('custom_bg_data'))
+    apply_design(user.get('current_theme', '標準'), user.get('current_wallpaper', '真っ黒'), user.get('custom_bg_data'))
 
-    # ★ 集中モード
+    # ★ 集中モード (BGM無し)
     if st.session_state["is_studying"]:
         st.empty()
         st.markdown(f"<h1 style='text-align: center; font-size: 3em;'>🔥 {st.session_state.get('current_subject', '勉強')} 中...</h1>", unsafe_allow_html=True)
@@ -415,10 +393,10 @@ def main():
         
         st.divider()
 
-        # 壁紙設定 (草原、プリセット、カスタム)
+        # 壁紙設定 (真っ黒、プリセット、カスタム)
         walls = user['unlocked_wallpapers'].split(',')
-        for garbage in ["真っ黒", "書斎"]:
-            if garbage in walls: walls.remove(garbage)
+        if "真っ黒" not in walls: walls.insert(0, "真っ黒")
+        if "草原" in walls: walls.remove("草原") # 初期化で草原に戻さない
         
         if user.get('custom_wallpaper_unlocked'):
             bg_mode = st.radio("壁紙モード", ["プリセット", "カスタム画像"], horizontal=True, label_visibility="collapsed")
@@ -434,15 +412,15 @@ def main():
                         st.success("更新しました！"); time.sleep(1); st.rerun()
                 elif user.get('current_wallpaper') == 'カスタム': st.success("カスタム画像適用中")
             else:
-                current_w = user.get('current_wallpaper', '草原')
-                if current_w not in walls: current_w = "草原"
+                current_w = user.get('current_wallpaper', '真っ黒')
+                if current_w not in walls: current_w = "真っ黒"
                 new_w = st.selectbox("壁紙", walls, index=walls.index(current_w) if current_w in walls else 0)
                 if new_w != user.get('current_wallpaper'):
                     supabase.table("users").update({"current_wallpaper": new_w}).eq("username", user['username']).execute()
                     st.rerun()
         else:
-            current_w = user.get('current_wallpaper', '草原')
-            if current_w not in walls: current_w = "草原"
+            current_w = user.get('current_wallpaper', '真っ黒')
+            if current_w not in walls: current_w = "真っ黒"
             new_w = st.selectbox("壁紙", walls, index=walls.index(current_w) if current_w in walls else 0)
             if new_w != user.get('current_wallpaper'):
                 supabase.table("users").update({"current_wallpaper": new_w}).eq("username", user['username']).execute()
@@ -670,8 +648,6 @@ def main():
                                 supabase.table("users").update({"coins": user['coins']-p, "unlocked_wallpapers": nl}).eq("username", user['username']).execute()
                                 st.balloons(); st.rerun()
                             else: st.error("コイン不足")
-
-        # BGM売り場は削除されました
 
         st.markdown("### 💎 その他")
         c1, c2 = st.columns(2)
